@@ -11,7 +11,7 @@ Unique mapping reads to a mixed reference, containing both organisms, serve as s
 
 WARNING: Disentangling-sRNA-Seq is not meant to be a complete automated and user-friendly pipeline, it consists of a series of scripts that may be useful for the sRNA-mediated species communication community.  
 
-Disentangling sRNA-Seq data to study RNA communication between species
+[1]Disentangling sRNA-Seq data to study RNA communication between species
 bioRxiv 2019
 JR Bermúdez-Barrientos, O Ramírez-Sánchez, FWN Chow, AH Buck, C Abreu-Goodger
 doi: https://doi.org/10.1101/508937

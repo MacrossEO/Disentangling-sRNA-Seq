@@ -1,17 +1,14 @@
 # Disentangling-sRNA-Seq
 
 
-Disentangling-sRNA-Seq consists of a series of scripts to separate small RNA sequencing data (sRNA-Seq) from libraries containing mixed information from two organisms.
+We provide a series of scripts to help separate small RNA sequencing data (sRNA-Seq) from libraries containing information from two interacting organisms.
 
-Small RNA sequences organism assignment are particularly challenging relative to longer mRNA sequences (standard RNA-Seq protocols). Due to their short length (~20 nt) random mappings may occur in large genomes just by chance. 
+Assigning the correct organism to each small RNA read is particularly challenging relative to longer mRNA sequences (standard RNA-Seq protocols). Due to their short length (~20-25 nt) random mappings can occur in large genomes just by chance. 
 
-In [1], we show that increasing sRNA sequences even by a single nucleotide decreases the chance for random mappings. We propose the usage of small RNA de novo or genome-guided assembly to increase sRNA length and by doing so disambiguate organism origin.
+We show that increasing the length of sRNA sequences even by a few nucleotides can greatly decrease random mappings. We propose using *de novo* or genome-guided assembly of sRNA-Seq data, to increase sRNA length and help disambiguate the organism of origin.
 
-Unique mapping reads to a mixed reference, containing both organisms, serve as support counts that guide the assignment of multi-mapping reads. We take additional caution for those reads where no guidance is possible and keep them as ambiguous.
+When mapping reads to a mixed reference, containing both organisms, we take advantage of uniquely-mapping reads as support counts that guide the assignment of multi-mapping reads. For those reads where no guidance is possible, we take the conservative approach of keeping them as ambiguous.
 
-WARNING: Disentangling-sRNA-Seq is not meant to be a complete automated and user-friendly pipeline, it consists of a series of scripts that may be useful for the sRNA-mediated species communication community.  
+WARNING: The scripts contained in this repository are not meant to be a completely automated and user-friendly pipeline: they they are provided "as is" with no warranty of any kind. We used these scripts for all the analyses performed in the following publication:
 
-[1]Disentangling sRNA-Seq data to study RNA communication between species
-bioRxiv 2019
-JR Bermúdez-Barrientos, O Ramírez-Sánchez, FWN Chow, AH Buck, C Abreu-Goodger
-doi: https://doi.org/10.1101/508937
+Disentangling sRNA-Seq data to study RNA communication between species. 2019. JR Bermúdez-Barrientos, O Ramírez-Sánchez, FWN Chow, AH Buck, C Abreu-Goodger. bioRxiv. https://doi.org/10.1101/508937

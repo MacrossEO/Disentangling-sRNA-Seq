@@ -51,19 +51,26 @@ If you have registered it in your path, you just have to name the tool:
 
 ## Use:
 1. Activate conda environment
-    conda activate snakemake-tutorial
+```
+conda activate snakemake-tutorial
+```
 2. make Bowtie1/Bowtie2 indexes
-    snakemake -s ~/path_to/diSrna/diSrna --cores 6 bowtie_index_all
+```
+snakemake -s ~/path_to/diSrna/diSrna --cores 6 bowtie_index_all
+```
 3. run diSrna pipe-line
-    snakemake -s ~/path_to/diSrna/diSrna --cores 6 contigs_report
+```
+snakemake -s ~/path_to/diSrna/diSrna --cores 6 contigs_report
+```
 4. (Optional) Clean all directories created by diSrna (except: genomes/bowtieIndex, and dea_contigs) 
-    snakemake -s ~/path_to/diSrna/diSrna clean_tmp
-
+```
+snakemake -s ~/path_to/diSrna/diSrna clean_tmp
+```
 ## Release description
 We redesigned our workflow and implemented it using the Snakemake framework.
 We updated most of our scripts to adapt them to the new workflow, but we didn't modify the core functions.
 For this release, we chose Trinity de-novo assembly only.
 
 ## Citation
-    If you use diSrna in your work, please cite the following:
+If you use diSrna in your work, please cite the following:
 Disentangling sRNA-Seq data to study RNA communication between species. 2020. JR Bermúdez-Barrientos, O Ramírez-Sánchez, FWN Chow, AH Buck, C Abreu-Goodger. Nucleic Acids Research. https://doi.org/10.1093/nar/gkz1198

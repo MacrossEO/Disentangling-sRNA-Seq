@@ -1,0 +1,335 @@
+#
+import os
+
+
+abspath = os.path.abspath('.')
+bin_dir = "/home/your_userName/path_to_bin/"
+diSrna_dir = "/home/your_userName/path_to_bin/diSrna_v0.2"
+
+#tools
+bowtie_build_bin = bin_dir + "bowtie-1.2.2/bowtie-build"
+bowtie_bin = bin_dir + "bowtie-1.2.2/bowtie"
+bowtie2_build_bin = bin_dir + "bowtie2-2.4.2-linux-x86_64/bowtie2-build"
+bowtie2_bin = bin_dir + "bowtie2-2.4.2-linux-x86_64/bowtie2"
+fastp_bin = bin_dir + "fastp/fastp"
+tally_bin = bin_dir + "tally/tally"
+samtools_bin = bin_dir + "samtools-1.5/samtools"
+seqtk_trinity_bin = bin_dir + "seqtk-trinity/seqtk-trinity"
+trinity_bin = bin_dir + "trinityrnaseq-v2.9.0/Trinity"
+
+#scripts
+tally2fasta_bin = diSrna_dir + "tally_to_fasta.pl"
+tag_seqs_bin = diSrna_dir + "tag_seqs_v0.R"
+count_reads_bin = diSrna_dir + "count_reads_v3.R"
+dea_counts_22g_bin = diSrna_dir + "dea_counts_22g_v2.R"
+contigs_report_bin = diSrna_dir + "contigs_report.Rmd"
+trim_extra_nuc_bin = diSrna_dir + "trim_extranuc_v2.1.r"
+assembly_statistics_bin = diSrna_dir + "assembly_statistics.R"
+sppc_bin = diSrna_dir + "sppc_v0.R"
+diSrna_bin = diSrna_dir + "diSrna_v0.R"
+merge_counts_bin = diSrna_dir + "merge_counts_v0.R"
+
+#Genomes and small RNAseq libraries
+host_genome='genomes/'+"Mus_musculus.fa"
+par_genome='genomes/'+"nHp.2.0.fa"
+hostPar_samples=glob_wildcards('raw_data/hostPar/{sample}.fastq.gz').sample
+host_samples=glob_wildcards('raw_data/host/{sample}.fastq.gz').sample
+adapter="TGGAATTCTCGGGTGCCAAGGAACTCCAGTCAC"
+
+#Resources
+threads = 7
+trinity_max_memory="20G"
+
+#Parameters
+mismatches = 0
+minReadLen = 18
+FDR=0.05
+
+#pipe-line rules
+host_basename=os.path.splitext(os.path.basename(host_genome))[0]
+par_basename=os.path.splitext(os.path.basename(par_genome))[0]
+
+host_gindex="genomes/bowtieIndex/" + host_basename
+par_gindex="genomes/bowtieIndex/" + par_basename
+hostPar_gindex="genomes/bowtieIndex/hostpar_genome"
+hostbt2_gindex="genomes/bowtieIndex/" + host_basename
+parbt2_gindex="genomes/bowtieIndex/" + par_basename
+
+rule all:
+    run:
+        print("""\
+            Usage: thingy [OPTIONS]
+             -h                        Display this usage message
+             -H hostname               Hostname to connect to
+        """)
+
+#step 1
+#Build genome indexes
+rule cat_genomes:
+    input: 
+        genomes=[host_genome,par_genome]
+    output: "genomes/hostpar_genome.fa"
+    shell: 'cat {input.genomes} > {output}'
+
+rule bowtie_index_all:    
+    input:
+        bowtie1=expand('genomes/bowtieIndex/{wildcard}.bowtieLog', wildcard=[par_basename,host_basename,"hostpar_genome"]),
+        bowtie2=expand('genomes/bowtieIndex/{wildcard}.bowtie2Log', wildcard=[par_basename,host_basename,"hostpar_genome"])
+
+rule bowtie_index:
+    input:
+        bowtie_build=bowtie_build_bin,
+        file="{path}/{file}.fa"
+    output: "{path}/bowtieIndex/{file}.bowtieLog"
+    threads: threads
+    shell: "{input.bowtie_build} {input.file} {wildcards.path}/bowtieIndex/{wildcards.file} --threads {threads} > {output}"
+    
+rule bowtie2_index:
+    input:
+        bowtie2_build=bowtie2_build_bin,
+        file="{path}/{file}.fa"
+    output: "{path}/bowtieIndex/{file}.bowtie2Log"
+    threads: threads
+    shell: "{input.bowtie2_build} {input.file} {wildcards.path}/bowtieIndex/{wildcards.file} --threads {threads} > {output}"
+    
+#step 2
+#adapter trimming
+rule trim_adapters:
+    input:
+        fastp=fastp_bin,
+        sample="raw_data/{path}/{sample}.fastq.gz"
+    output: "trimmed_data/{path}/{sample}.fq.gz"
+    threads: threads
+    params:
+        min_len=minReadLen,
+        adapter=adapter
+    shell: "{input.fastp} -a {params.adapter} --html trimmed_data/{wildcards.path}/{wildcards.sample}.html --json trimmed_data/{wildcards.path}/{wildcards.sample}.json --thread {threads} --length_required {params.min_len} -i {input.sample} -o {output}"
+
+#step 2 c)
+rule map_to_hostparGenome:
+    input:
+        bowtie=bowtie_bin,
+        sample="trimmed_data/{path}/{sample}.fq.gz"
+    output:
+        fq=temp("mapped_data/{path}/{sample}.fq")
+    threads: threads
+    params:
+        v=mismatches,
+        gindex=hostPar_gindex
+    shell:
+        '''
+        {input.bowtie} -S -v {params.v} --best -p {threads} {params.gindex} {input.sample} mapped_data/{wildcards.path}/{wildcards.sample}.sam --al {output.fq} &&
+        rm mapped_data/{wildcards.path}/{wildcards.sample}.sam 
+        '''
+
+#step 2 d)
+rule fq2tally_fq2fa_tally2fa:
+    input:
+        tally=tally_bin,
+        seqtk=seqtk_trinity_bin,
+        tally2fasta=tally2fasta_bin,
+        sample="mapped_data/{path}/{sample}.fq"
+    output:
+        tally="mapped_data/{path}/{sample}.tally",
+        redfa="mapped_data/{path}/{sample}.reduced.fa.gz",
+        fa="mapped_data/{path}/{sample}.fa.gz"
+    shell:
+        '''
+        {input.tally} -i {input.sample} -o {output.tally} --nozip -format '%R%t%X%t%L%n' &&
+        {input.tally2fasta} -f {output.tally} | gzip > {output.redfa}
+        {input.seqtk} seq -A -R 1 {input.sample} | gzip > {output.fa} 
+        '''
+  
+#step 2 e)
+rule uniqueReads:
+    input:
+        tally=tally_bin,
+        tally2fasta=tally2fasta_bin,
+        host=expand('mapped_data/host/{wildcard}.tally', wildcard=host_samples),
+        hostPar=expand('mapped_data/hostPar/{wildcard}.tally', wildcard=hostPar_samples)
+    output:        
+        host_hostPar="mapped_data/host_hostPar.fa.gz",
+        host="mapped_data/host.fa.gz",
+        hostPar="mapped_data/hostPar.fa.gz"
+    shell:
+        '''
+        cat {input.host} {input.hostPar} > mapped_data/host_hostPar.tally &&
+        cat {input.host} > mapped_data/host.tally &&
+        cat {input.hostPar} > mapped_data/hostPar.tally &&
+        {input.tally} -i mapped_data/host_hostPar.tally -o mapped_data/host_hostPar.tally.tally -record-format '%R%b%X%b%F%n' --nozip -format '%R%t%X%t%L%n' &&
+        {input.tally2fasta} -f mapped_data/host_hostPar.tally.tally | gzip > {output.host_hostPar} &&
+        {input.tally} -i mapped_data/host.tally -o mapped_data/host.tally.tally -record-format '%R%b%X%b%F%n' --nozip -format '%R%t%X%t%L%n' &&
+        {input.tally2fasta} -f mapped_data/host.tally.tally | gzip > {output.host} &&
+        {input.tally} -i mapped_data/hostPar.tally -o mapped_data/hostPar.tally.tally -record-format '%R%b%X%b%F%n' --nozip -format '%R%t%X%t%L%n' &&
+        {input.tally2fasta} -f mapped_data/hostPar.tally.tally | gzip > {output.hostPar} &&
+        rm mapped_data/*.tally 
+        '''
+
+#step 2 e)#Classify contigs_alg_reads sequences (bowtie1): host, parasite or ambiguous
+rule tagSeqs:
+    input:
+        tag_seqs=tag_seqs_bin,
+        seqs="{path}/{file}.fa.gz",
+        bowtie=bowtie_bin,
+        bowtie2=bowtie2_bin
+    output:"{path}/{file}_tag.fa"
+    threads: threads
+    params:
+        host=host_gindex,
+        par=par_gindex,
+        hostbt2=hostbt2_gindex,
+        parbt2=parbt2_gindex
+    shell: "Rscript {input.tag_seqs} {input.seqs} {params.host} {params.par} {params.hostbt2} {params.parbt2} {output} {threads} {input.bowtie} {input.bowtie2}"
+
+
+#step 2 f) Count reads frequencies in each (host, par) libraries
+rule countReads:
+    input:
+        cReads=count_reads_bin,
+        samples="mapped_data/{path}/{sample}.reduced.fa.gz",
+        unique_reads_db="mapped_data/bowtieIndex/host_hostPar_tag.bowtieLog",
+        bowtie=bowtie_bin,
+        samtools=samtools_bin 
+    output:"dea_reads/{path}/{sample}.counts"
+    threads:1
+    shell:"Rscript {input.cReads} {input.samples} mapped_data/bowtieIndex/host_hostPar_tag {output} {threads} {input.bowtie} {input.samtools}"
+     
+rule merge_counts_reads:
+    input:
+        merge=merge_counts_bin,
+        uniqueReads="mapped_data/host_hostPar_tag.fa",
+        hostPar = expand('dea_reads/hostPar/{wildcard}.counts', wildcard=hostPar_samples),
+        host = expand('dea_reads/host/{wildcard}.counts', wildcard=host_samples)
+    output:"dea_reads/host_hostPar_tag.rds"
+    shell:"Rscript {input.merge} NA {input.uniqueReads} dea_reads/hostPar dea_reads/host {output}"
+
+
+#step 2 g) (optional) Merge library counts and calculate 22g frecuencies
+rule count_22g:
+    input:
+        dea_counts_22g = dea_counts_22g_bin,
+        hostPar = expand('mapped_data/hostPar/{wildcard}.reduced.fa.gz.reads', wildcard=hostPar_samples),
+        host = expand('mapped_data/host/{wildcard}.reduced.fa.gz.reads', wildcard=host_samples)
+    shell: "Rscript {input.dea_counts_22g} reads  mapped_data/hostPar mapped_data/host"
+
+
+
+rule trinity_assembly:
+    input:
+        trinity=trinity_bin,
+        samples=expand("mapped_data/hostPar/{wildcard}.fa.gz",wildcard=hostPar_samples)
+    threads: threads
+    params:
+        max_mem=trinity_max_memory
+    output:temp("dea_contigs/inchworm.fasta")
+    shell:
+        '''
+        cat {input.samples} > dea_contigs/samples.fa.gz &&
+        {input.trinity} --seqType fa --max_memory {params.max_mem} --single dea_contigs/samples.fa.gz --output dea_contigs/trinity_results --CPU {threads} --KMER_SIZE 19 --min_contig_length 19 --full_cleanup --min_kmer_cov 3 --no_run_chrysalis --no_version_check --no_normalize_reads --no_bowtie --SS_lib_type F &&
+        mv dea_contigs/trinity_results/inchworm.fa {output} &&
+        rm -r dea_contigs/trinity_results
+        '''
+        
+rule trinity_trim:
+    input:
+        trim=trim_extra_nuc_bin,
+        contigs="dea_contigs/inchworm.fasta",
+        hostPar="mapped_data/hostPar.fa.gz",
+        bowtie_build=bowtie_build_bin,
+        bowtie=bowtie_bin,
+        tally2fasta=tally2fasta_bin,
+        samtools=samtools_bin        
+    output:"dea_contigs/contigs.fa"
+    threads: threads
+    shell:
+        "Rscript {input.trim} {input.contigs} {input.hostPar} {output} {threads} {input.bowtie_build} {input.bowtie} {input.tally2fasta} {input.samtools}"
+
+rule trinity_eval:
+    input:
+        assembly_stat=assembly_statistics_bin,
+        contigs="dea_contigs/contigs.fa",
+        contigs_db="dea_contigs/bowtieIndex/contigs.bowtieLog",
+        samples=expand("mapped_data/hostPar/{wildcard}.fa.gz",wildcard=hostPar_samples),
+        bowtie_build=bowtie_build_bin,
+        bowtie=bowtie_bin
+    output:
+        stat="dea_contigs/contigs.stat",
+        gz="dea_contigs/contigs.fa.gz"
+    threads: threads
+    params:
+        absPath = abspath,
+        gindex=hostPar_gindex,
+        gLen=3480328102
+    shell:
+        '''
+        cat {input.samples} > dea_contigs/samples.fa.gz &&
+        Rscript {input.assembly_stat} {params.absPath} dea_contigs dea_contigs/bowtieIndex/contigs {output.stat} dea_contigs/samples.fa.gz {params.gindex} {params.gLen} {threads} {input.bowtie} &&
+        gzip {input.contigs}
+        rm dea_contigs/samples.fa.gz
+        '''
+
+rule get_sppc:
+    input:
+        sppc=sppc_bin,
+        contigs_db="dea_contigs/bowtieIndex/contigs.bowtieLog",
+        samples="mapped_data/{file}.fa.gz",
+        bowtie=bowtie_bin,
+        tally2fasta=tally2fasta_bin,
+        samtools=samtools_bin 
+    output:"dea_contigs/{file}.sppc"
+    threads: 1
+    shell:"Rscript {input.sppc} dea_contigs/bowtieIndex/contigs {input.samples} {output} {threads} {input.bowtie} {input.tally2fasta} {input.samtools}"
+
+rule diSrna_hostPar:
+    input:
+        diSrna=diSrna_bin,
+        contigs_db="dea_contigs/bowtieIndex/contigs.bowtieLog",
+        samples="mapped_data/hostPar/{file}.reduced.fa.gz",
+        unique_reads_db="mapped_data/bowtieIndex/host_hostPar_tag.bowtieLog",
+        sppc="dea_contigs/hostPar.sppc",
+        bowtie=bowtie_bin,
+        tally2fasta=tally2fasta_bin,
+        samtools=samtools_bin 
+    output:"dea_contigs/hostPar/{file}.counts"
+    threads:1
+    shell:"Rscript {input.diSrna} dea_contigs/bowtieIndex/contigs {input.samples} mapped_data/bowtieIndex/host_hostPar_tag {input.sppc} {output} {threads} {input.bowtie} {input.tally2fasta} {input.samtools}"
+
+rule diSrna_host:
+    input:
+        diSrna=diSrna_bin,
+        contigs_db="dea_contigs/bowtieIndex/contigs.bowtieLog",
+        samples="mapped_data/host/{file}.reduced.fa.gz",
+        unique_reads_db="mapped_data/bowtieIndex/host_hostPar_tag.bowtieLog",
+        sppc="dea_contigs/host.sppc",
+        bowtie=bowtie_bin,
+        tally2fasta=tally2fasta_bin,
+        samtools=samtools_bin 
+    output:"dea_contigs/host/{file}.counts"
+    threads:1
+    shell:"Rscript {input.diSrna} dea_contigs/bowtieIndex/contigs {input.samples} mapped_data/bowtieIndex/host_hostPar_tag {input.sppc} {output} {threads} {input.bowtie} {input.tally2fasta} {input.samtools}"
+        
+rule merge_counts_contigs:
+    input:
+        merge=merge_counts_bin,
+        contigs="dea_contigs/contigs_tag.fa",
+        uniqueReads="mapped_data/host_hostPar_tag.fa",
+        hostPar = expand('dea_contigs/hostPar/{wildcard}.counts', wildcard=hostPar_samples),
+        host = expand('dea_contigs/host/{wildcard}.counts', wildcard=host_samples)
+    output:"dea_contigs/contigs_tag.rds"
+    shell:"Rscript {input.merge} {input.contigs} {input.uniqueReads} dea_contigs/hostPar dea_contigs/host {output}"
+    
+# report
+rule contigs_report:
+    input:
+        contigs_report = contigs_report_bin,
+        readCounts_rds = "dea_reads/host_hostPar_tag.rds",
+        contigCounts_rds = "dea_contigs/contigs_tag.rds"
+    params:
+        abspath= abspath,
+        absOutput = abspath + "/dea_contigs/contigs_report.html",
+        FDR = FDR
+    output: "dea_contigs/contigs_report.html"
+    shell: "Rscript -e \"rmarkdown::render('{input.contigs_report}',output_file='{params.absOutput}',params=list(wd='{params.abspath}',host_dir='trimmed_data/host',hostPar_dir='trimmed_data/hostPar',readCounts_rds='{input.readCounts_rds}',contigCounts_rds='{input.contigCounts_rds}',FDR={params.FDR}))\""
+
+rule clean_tmp:
+    shell: "rm -r trimmed_data && rm -r mapped_data && rm -r dea_contigs"

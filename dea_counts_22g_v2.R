@@ -5,15 +5,15 @@
 #22g quantification
 
 rm(list=ls())
-computer="mazorka"
-if(computer=="local"){
-  option = "reads"
-  dir1 = "/Users/macross/Documents/data/sRNAs_assembly/assembly_eval/mu_ls/mapped/muls/DEA_contigs_informed_0.1"
-  dir2 = "/Users/macross/Documents/data/sRNAs_assembly/assembly_eval/hp_mm/mapped/mm_combined/DEA_clustersSppC" 
-  dir3 = "/Users/macross/Documents/data/sRNAs_assembly/assembly_eval/hp_mm/mapped/hp_combined/DEA_clustersSppC"
+computer="production"
+if(computer=="test"){
+  option = "contigs"
+  dir1 = "/home/macross/compartida/data/miRNA/assembly_eval/mm_hp/mapped_18-50/diSrna/DEA_contigs_CEM/mmhp"
+  dir2 = NA 
+  dir3 = NA
   
 }
-if(computer=="mazorka"){
+if(computer=="production"){
   args = commandArgs(trailingOnly=TRUE)
   option = args[1]
   dir1 = args[2]

@@ -4,9 +4,11 @@ use strict;
 use warnings;
 use Getopt::Long;
 my $tally_file;
+my $lid;
 
 GetOptions(
     'tally_file|f=s'     =>\$tally_file,
+    'letter_id|i:s'   => \$lid,
 );
 
 
@@ -23,6 +25,10 @@ my %peptide_seq=();
   &usage();
   exit(1)
  }
+  if(!$lid){
+   $lid = "s";
+   print STDERR "$lid\n";
+  }  
 }
 
 sub tally_to_fasta{
@@ -31,7 +37,7 @@ sub tally_to_fasta{
   my @line;
   my $cont =1;
   my $head = "";
-  my $len = 0;
+  my $len = 0;  
   
     open IDS, "$f" or die "Cannot open file  $f $!\n";
     
@@ -42,7 +48,7 @@ sub tally_to_fasta{
         $corrected = &fasta_correction($line[0]);
         $len = scalar(@line)-1;
         $head = join(',', @line[1..$len]);
-        print ">s$cont,$head\n$corrected\n";
+        print ">$lid".$cont.",$head\n$corrected\n";
         $cont++;
     }
     close IDS;
@@ -75,11 +81,11 @@ NAME
     tally_to_fasta.pl   
 
 USAGE
-    tally_to_fasta.pl -f file.tally > file.fa
+    tally_to_fasta.pl -f file.tally (-i s)  > file.fa
 
 OPTIONS
     
-Version 1.0, Copyright (C) 26/feb/18 EO
+Version 1.1, Copyright (C) 12/jan/21 EO
 
 EOF
 }

@@ -1,0 +1,367 @@
+---
+title: "diSRNA report"
+author: ""
+date: ""
+output:
+  prettydoc::html_pretty:
+    theme: lumen
+    highlight: github
+params:
+  wd: '/home/macross/compartida/data/miRNA/mm_hp'
+  host_dir: "trimmed_data/host"
+  hostPar_dir: "trimmed_data/hostPar"
+  readCounts_rds: "dea_reads/host_hostPar_tag.rds"
+  contigCounts_rds: "dea_contigs/contigs_tag.rds"
+  FDR: 0.05
+---
+
+```{r setup, include=FALSE}
+wd = params$wd
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = wd)
+```
+
+```{r,message=FALSE,echo=F}
+library(rjson)
+library(ggplot2)
+library(RColorBrewer)
+library(kableExtra)
+library(gridExtra)
+library(edgeR)
+library(DT)
+```
+
+```{r,include=F}
+host_dir = params$host_dir
+hostPar_dir = params$hostPar_dir
+readCounts_rds= params$readCounts_rds
+contigCounts_rds = params$contigCounts_rds
+FDR = params$FDR
+```
+
+```{r,echo=F}
+rowsCols2array = function(df,option="rows"){
+  res = c()
+  if(option=="rows"){
+    for(i in 1:nrow(df)){
+      res = c(res,df[i,])
+    }
+  }
+  if(option=="cols"){
+    for(i in 1:ncol(df)){
+      res = c(res,df[,i])
+    }
+  }
+  return(array(res))
+}
+
+df_ggplot = function(df){
+  df = data.frame(perc = rowsCols2array(df,"cols"),
+                       type = rep(rownames(df),ncol(df)),
+                       sample = rep(colnames(df),each=nrow(df)))
+}
+
+## Function to extract legend
+#https://github.com/hadley/ggplot2/wiki/Share-a-legend-between-two-ggplot2-graphs
+g_legend <- function(a.gplot){ 
+    tmp <- ggplot_gtable(ggplot_build(a.gplot)) 
+    leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box") 
+    legend <- tmp$grobs[[leg]] 
+    legend
+} 
+
+get_ylim = function(df){
+  ysum = max(apply(df[c("a","p"),],2,sum))
+  ymax = ysum + ( (.33*ysum)/.66 )
+}
+
+amb_plot = function(df,myColors,ylimMax){
+  p = ggplot(df,aes(x=sample, y=perc, fill=type)) +
+  geom_bar(stat="identity") +
+  scale_fill_manual(values = myColors,
+                    labels = c("Host","Ambiguous","Parasite")) +
+  coord_cartesian( ylim = c(0, ylimMax)) +
+  theme_minimal() +
+  labs(x="",y="Percent of reads") +
+  theme(axis.text.x = element_text(angle = 90,size=12),
+        axis.text.y = element_text(size=12),
+        legend.title = element_blank()) 
+  return(p)
+}
+
+json2df = function(myPath){
+  jsonFiles = list.files(path=myPath,pattern=".json$",full.names=T)
+  
+  df = data.frame(matrix(0,nrow=3,ncol=length(jsonFiles)))
+  rownames(df) = c("Raw data","After trimming","After mapping")
+  samples = matrix(unlist(strsplit(basename(jsonFiles),"[.]")),ncol=2,byrow=T)[,1]
+  colnames(df) = samples
+  
+  for(j in 1:length(jsonFiles)){
+    jsonData = fromJSON(file=jsonFiles[j])
+    
+    df[1,samples[j]] = jsonData$summary$before_filtering$total_reads
+    df[2,samples[j]] = jsonData$summary$after_filtering$total_reads
+  }
+  return(df)
+}
+
+myKablefunc = function(df,header=""){
+  header=paste("<details><summary>Click to expand",header,"</summary>")
+  cat(c(header))
+  cat(
+  kable(df,caption="") %>%
+    kable_styling(bootstrap_options = c("striped","hover","condensed","responsive"),full_width=F,position="left")
+)
+  cat(c("</details>"))
+}
+```
+
+```{r,echo=F}
+setwd(wd)
+#json data
+dfHost = json2df(host_dir)
+dfHostPar = json2df(hostPar_dir)
+
+#readCounts data
+load(readCounts_rds)
+rcounts = tcounts  
+rtag = rcounts$tag 
+rcounts = rcounts[,c(1:(ncol(rcounts)-1))]
+rtcounts = apply(rcounts,2,sum)
+
+#contigCounts data
+load(contigCounts_rds)
+ccounts = tcounts
+ctag = ccounts$tag 
+ccounts = ccounts[,c(1:(ncol(ccounts)-1))]
+ctcounts = apply(ccounts,2,sum)
+```
+
+## Host reads
+```{r,echo=F,results='asis'}
+df = dfHost
+
+df[3,colnames(df)] = rtcounts[colnames(df)]
+df_perc = apply(df,2,function(x)round((x/sum(x[1]))*100,2))
+df_perc_aux = df_perc
+
+df_perc[1,] = df_perc[1,] - df_perc[2,] 
+df_perc[2,] = df_perc[2,] - df_perc[3,] 
+df_perc_ggplot = df_ggplot(df_perc)
+df_perc_ggplot$type = factor(df_perc_ggplot$type,levels=sort(unique(df_perc_ggplot$type),decreasing=T))
+
+myColors = brewer.pal(9,"PuBu")[c(6,7,8)]
+p = ggplot(df_perc_ggplot ,aes(x=sample, y=perc, fill=type)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  coord_flip() +
+  scale_fill_manual(values=myColors) +
+  guides(fill = guide_legend(reverse=TRUE)) +
+  labs(x="",y="Percent of reads") + 
+  theme(axis.text.x = element_text(angle = 0,size=12),
+        axis.text.y = element_text(size=12),
+        legend.position="right",
+        legend.title = element_blank()) 
+p
+
+myKablefunc(df_perc_aux,"percent data")
+myKablefunc(df,"data")
+```
+
+## HostPar reads
+```{r,echo=F,results='asis'}
+df = dfHostPar
+
+df[3,colnames(df)] = rtcounts[colnames(df)]
+df_perc = apply(df,2,function(x)round((x/sum(x[1]))*100,2))
+df_perc_aux = df_perc
+
+df_perc[1,] = df_perc[1,] - df_perc[2,] 
+df_perc[2,] = df_perc[2,] - df_perc[3,] 
+df_perc_ggplot = df_ggplot(df_perc)
+df_perc_ggplot$type = factor(df_perc_ggplot$type,levels=sort(unique(df_perc_ggplot$type),decreasing=T))
+
+p = ggplot(df_perc_ggplot ,aes(x=sample, y=perc, fill=type)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  coord_flip() +
+  scale_fill_manual(values=myColors) +
+  guides(fill = guide_legend(reverse=TRUE)) +
+  labs(x="",y="Percent of reads") + 
+  theme(axis.text.x = element_text(angle = 0,size=12),
+        axis.text.y = element_text(size=12),
+        legend.position="right",
+        legend.title = element_blank()) 
+p
+
+myKablefunc(df_perc_aux,"percent data")
+myKablefunc(df,"data")
+```
+
+## host amb
+```{r,echo=F,results='asis'}
+#reads
+countsHost = rcounts[,colnames(dfHost)]
+ambCounts = apply(countsHost,2,function(x)tapply(x,rtag,sum))
+ambCounts_perc = apply(ambCounts,2,function(x)round((x/sum(x))*100,2))
+ambCounts_perc_ggplot = df_ggplot(ambCounts_perc)
+ambCounts_perc_ggplot$type = factor(ambCounts_perc_ggplot$type,levels=c("h","a","p"))
+
+#contigs
+countsHost = ccounts[,colnames(dfHost)]
+cambCounts = apply(countsHost,2,function(x)tapply(x,ctag,sum))
+cambCounts_perc = apply(cambCounts,2,function(x)round((x/sum(x))*100,2))
+cambCounts_perc_ggplot = df_ggplot(cambCounts_perc)
+cambCounts_perc_ggplot$type = factor(cambCounts_perc_ggplot$type,levels=c("h","a","p"))
+
+#plot
+ylimMax = get_ylim(ambCounts_perc)
+myColors = brewer.pal(4,"Set1")[c(3,4,2)]
+p = amb_plot(ambCounts_perc_ggplot,myColors,ylimMax) + theme(legend.position="bottom")
+pc = amb_plot(cambCounts_perc_ggplot,myColors,ylimMax)
+
+mylegend <- g_legend(p)
+
+grid.arrange(arrangeGrob(p + theme(legend.position="none"),
+                         pc + theme(legend.position="none") + labs(y=""),
+                         nrow=1),
+             mylegend, nrow=2,heights=c(10, 1),
+             top="Reads vs Contigs")
+
+myKablefunc(ambCounts_perc,"Reads percent data")
+myKablefunc(ambCounts,"Reads data")
+myKablefunc(cambCounts_perc,"Contigs percent data")
+myKablefunc(cambCounts,"Contigs data")
+```
+
+## HostPar amb
+```{r,echo=F,results='asis'}
+#reads
+countsHost = rcounts[,colnames(dfHostPar)]
+ambCounts = apply(countsHost,2,function(x)tapply(x,rtag,sum))
+ambCounts_perc = apply(ambCounts,2,function(x)round((x/sum(x))*100,2))
+ambCounts_perc_ggplot = df_ggplot(ambCounts_perc)
+ambCounts_perc_ggplot$type = factor(ambCounts_perc_ggplot$type,levels=c("h","a","p"))
+
+#contigs
+countsHost = ccounts[,colnames(dfHostPar)]
+cambCounts = apply(countsHost,2,function(x)tapply(x,ctag,sum))
+cambCounts_perc = apply(cambCounts,2,function(x)round((x/sum(x))*100,2))
+cambCounts_perc_ggplot = df_ggplot(cambCounts_perc)
+cambCounts_perc_ggplot$type = factor(cambCounts_perc_ggplot$type,levels=c("h","a","p"))
+#myColors = brewer.pal(10,"Paired")[c(4,10,2)]
+#c2 = brewer.pal(4,"Set1")[c(3,4,2)]
+#myColors[2] = c2[2]
+
+ylimMax = get_ylim(ambCounts_perc)
+myColors = brewer.pal(4,"Set1")[c(3,4,2)]
+p = amb_plot(ambCounts_perc_ggplot,myColors,ylimMax) + theme(legend.position="bottom")
+pc = amb_plot(cambCounts_perc_ggplot,myColors,ylimMax)
+mylegend <- g_legend(p)
+
+grid.arrange(arrangeGrob(p + theme(legend.position="none"),
+                         pc + theme(legend.position="none") + labs(y=""),
+                         nrow=1),
+             mylegend, nrow=2,heights=c(10, 1),
+             top="Reads vs Contigs")
+
+myKablefunc(ambCounts_perc,"Reads percent data")
+myKablefunc(ambCounts,"Reads data")
+myKablefunc(cambCounts_perc,"Contigs percent data")
+myKablefunc(cambCounts,"Contigs data")
+```
+
+## DEA analysis
+```{r,warning=F,results='asis'}
+## COUNT LOADING AND ANNOTATION ##
+group = rep("X",ncol(ccounts))
+group[which(colnames(ccounts) %in% colnames(dfHostPar))] = "treatment"
+group[which(colnames(ccounts) %in% colnames(dfHost))] = "control"
+group = factor(group)
+
+y <- DGEList(ccounts, 
+             group=group,
+             genes=data.frame(species=ctag))
+
+#DESIGN MATRIX
+design <- model.matrix(~0+group)
+colnames(design) <- levels(y$samples$group)
+TvsC <- makeContrasts(treatment-control, levels=design)
+
+#FILTERING TO REMOVE LOW COUNTS
+keep = rowSums(cpm(y) >= 1) >= 2
+#keep = filterByExpr(y)
+keep_df = data.frame(array(summary(keep)),row.names=names(summary(keep)))
+myKablefunc(keep_df,"data filtering")
+y = y[keep,,keep.lib.sizes=FALSE]
+
+##NORMALIZATION FOR COMPOSITION BIAS
+y = calcNormFactors(y)
+
+##EXPLORING DIFFENCES BETWEEN LIBRARIES
+colors = ifelse(group=="control","blue","red")
+plotMDS(y,col=colors)
+
+##DISPERSION ESTIMATION
+y = estimateDisp(y,design,robust=T)
+plotBCV(y)
+
+#FIT MODEL
+fit = glmFit(y,design, dispersion=y$common.dispersion)
+
+###TESTING FOR DIFFERENTIAL EXPRESSION 
+res = glmLRT(fit, contrast=TvsC)
+topTab = topTags(res, n=Inf)$table
+topTab = cbind(species=topTab$species,
+               round(topTab[,c("logFC","logCPM")],2),
+               signif(topTab[,c("PValue","FDR")], digits=2))
+datatable(topTab[topTab$FDR<FDR,])
+
+###FINAL PLOT 
+topTab$upde = ifelse(topTab$FDR<FDR & topTab$logFC>0,T,F)
+
+paired_colors <- brewer.pal(n=10, "Paired")[c(1,2,3,4,9,10)] 
+xlim = range(topTab$logCPM)
+ylim = range(topTab$logFC)
+
+plot(topTab[topTab$upde==F & topTab$species=="h","logCPM"],
+     topTab[topTab$upde==F & topTab$species=="h","logFC"],
+     col=paired_colors[3],xlim=xlim,ylim=ylim,
+     xlab="Log2CPM",ylab="Log2FC")
+points(topTab[topTab$upde==F & topTab$species=="p","logCPM"],
+       topTab[topTab$upde==F & topTab$species=="p","logFC"],
+       col=paired_colors[1])
+points(topTab[topTab$upde==F & topTab$species=="a","logCPM"],
+       topTab[topTab$upde==F & topTab$species=="a","logFC"],
+       col=paired_colors[5])
+points(topTab[topTab$upde==T & topTab$species=="h","logCPM"],
+       topTab[topTab$upde==T & topTab$species=="h","logFC"],
+       col=paired_colors[4])
+points(topTab[topTab$upde==T & topTab$species=="p","logCPM"],
+       topTab[topTab$upde==T & topTab$species=="p","logFC"],
+       col=paired_colors[2])
+points(topTab[topTab$upde==T & topTab$species=="a","logCPM"],
+       topTab[topTab$upde==T & topTab$species=="a","logFC"],
+       col=paired_colors[6])
+abline(h=0,col="grey",lty=5)
+
+topTab$ou = paste(topTab$upde,topTab$species,sep="")
+seqs = tapply(topTab$species,topTab$ou,length)
+lgnd = c()
+lgnd[1] = paste("Up p (",seqs["TRUEp"],")",sep="")
+lgnd[2] = paste("Up h (",seqs["TRUEh"],")",sep="")
+lgnd[3] = paste("Up a (",seqs["TRUEa"],")",sep="")
+lgnd[4] = paste("non-Up p (",seqs["FALSEp"],")",sep="")
+lgnd[5] = paste("non-Up h (",seqs["FALSEh"],")",sep="")
+lgnd[6] = paste("non-Up a (",seqs["FALSEa"],")",sep="")
+legend("bottomright",legend=lgnd,fill=paired_colors[c(2,4,6,1,3,5)],border=paired_colors[c(2,4,6,1,3,5)],cex=0.7,bty="o")
+
+
+
+```
+
+```{r}
+
+```
+

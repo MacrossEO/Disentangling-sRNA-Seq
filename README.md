@@ -36,7 +36,7 @@ Make sure that your system supplies the following dependencies for diSrna.
   - edgeR
   - DT
 
-Before you start:
+## Before you start:
 1. You need to modify the diSrna script to tell it where the binary files of your tools are located. 
 Example:
 ```

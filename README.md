@@ -64,15 +64,15 @@ cd home/user/my_diSra_project
 ```
 3. make Bowtie1/Bowtie2 indexes
 ```
-snakemake -s ~/path_to/diSrna/diSrna --cores 6 bowtie_index_all
+snakemake -s ~/path_to/Disentangling-sRNA-Seq/diSrna --cores 6 bowtie_index_all
 ```
 4. run diSrna pipe-line
 ```
-snakemake -s ~/path_to/diSrna/diSrna --cores 6 contigs_report
+snakemake -s ~/path_to/Disentangling-sRNA-Seq/diSrna --cores 6 contigs_report
 ```
 5. (Optional) Clean all directories created by diSrna (except: genomes/bowtieIndex, and dea_contigs) 
 ```
-snakemake -s ~/path_to/diSrna/diSrna clean_tmp
+snakemake -s ~/Disentangling-sRNA-Seq/diSrna/diSrna clean_tmp
 ```
 ## Release description
 We redesigned our workflow and implemented it using the Snakemake framework.

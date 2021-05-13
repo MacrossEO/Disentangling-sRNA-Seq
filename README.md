@@ -2,8 +2,11 @@
 
 ## Introduction
 Assigning the correct organism to each small RNA read is particularly challenging relative to longer mRNA sequences (standard RNA-Seq protocols). Due to their short length (~20-25 nt) random mappings can occur in large genomes just by chance.
+
 We show that increasing the length of sRNA sequences even by a few nucleotides can greatly decrease random mappings. We propose using de novo or genome-guided assembly of sRNA-Seq data, to increase sRNA length and help disambiguate the organism of origin.
+
 When mapping reads to a mixed reference, containing both organisms, we take advantage of uniquely-mapping reads as support counts that guide the assignment of multi-mapping reads. For those reads where no guidance is possible, we take the conservative approach of keeping them as ambiguous.
+
 We provide a pipeline called diSrna to help separate small RNA sequencing data (sRNA-Seq) from libraries containing information from two interacting organisms.
 
 ## Installation
@@ -14,13 +17,13 @@ Clone the repository.
 Make sure that your system supplies the following dependencies for diSrna.
 - OS: Linux, Mac OS
 - miniconda
-- bowtie-1.2.2
-- bowtie2-2.4.2
+- bowtie-1.2.2 (Newer versions not tested)
+- bowtie2-2.4.2 (Newer versions not tested)
 - fastp
 - tally
-- samtools-1.5
+- samtools-1.5 (Newer versions not tested)
 - seqtk-trinity
-- trinityrnaseq-v2.9.0
+- trinityrnaseq-v2.9.0 (Newer versions not complatible)
 - pandoc
 - Rscript
 - The following R packages installed:
@@ -42,9 +45,10 @@ bowtie_build_bin = bin_dir + "bowtie-1.2.2/bowtie-build"
 ```
 
 If you have registered it in your path, you just have to name the tool:
+
     bowtie_build_bin = "bowtie-build"
 
-2. The program assumes that: 
+2. The pipeline assumes that: 
 - Host and Par genomes (ej. M_musculus.fa/H_ polygyrus.fa) are located in the "genomes" directory (ej. /home/user/my_diSra_project/genomes).
 - Your host libraries (fastq.gz files) are located in the "raw_data/host" directory (ej. /home/user/my_diSra_project/raw_data/host). 
 - Your hostPar libraries (fastq.gz files) are located in the "raw_data/hostPar" directory (ej. /home/user/my_diSra_project/raw_data/hostPar).
@@ -54,15 +58,19 @@ If you have registered it in your path, you just have to name the tool:
 ```
 conda activate snakemake-tutorial
 ```
-2. make Bowtie1/Bowtie2 indexes
+2. Go to your folder project
+```
+cd home/user/my_diSra_project
+```
+3. make Bowtie1/Bowtie2 indexes
 ```
 snakemake -s ~/path_to/diSrna/diSrna --cores 6 bowtie_index_all
 ```
-3. run diSrna pipe-line
+4. run diSrna pipe-line
 ```
 snakemake -s ~/path_to/diSrna/diSrna --cores 6 contigs_report
 ```
-4. (Optional) Clean all directories created by diSrna (except: genomes/bowtieIndex, and dea_contigs) 
+5. (Optional) Clean all directories created by diSrna (except: genomes/bowtieIndex, and dea_contigs) 
 ```
 snakemake -s ~/path_to/diSrna/diSrna clean_tmp
 ```
